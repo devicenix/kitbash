@@ -1,0 +1,56 @@
+https://chiselapp.com/user/ttcoder/repository/genode-haiku/wiki?name=Setup:Main
+
+genode toolchain
+https://genode.org/download/tool-chain
+
+Packages
+
+sudo apt install  flex bison tcl libxml2-utils libelf-dev
+    # 'sudo apt' works in Debian-like Linux distributions; adapt as needed for other distros
+    # 'libxml2-utils' is required for "xmllint"
+    # 'flex' will also install gcc and assorted libs, but one of the libs
+    # is needed (by the genode-toolchain) anyway
+    # 'libelf-dev' provides the 'gelf.h' header, required for building usb_hid, driver/nic, intel_fb
+And a few additional ones needed for building and running an .iso image:
+
+sudo apt install  fossil xorriso qemu-system-x86
+
+# genode setup
+git clone https://github.com/genodelabs/genode.git
+#git clone https://github.com/genodelabs/genode-world.git genode/repos/world  # if you need libfuse & libntfs-3g
+cd genode
+git checkout -b 24.08 24.08
+# now is the time to apply the patches listed below, if you want them to be part of the build
+./tool/create_builddir x86_64
+nano build/x86_64/etc/build.conf  # enable -j4 and most extra repos
+# you might need only a (left-most) subset of these:
+./tool/ports/prepare_port nova grub2 x86emu stb ttf-bitstream-vera jpeg libc stdcxx  zlib ntfs-3g lwip libav dde_bsd dde_linux acpica
+# for "jam hog-demos.emu6" basic scenario:
+make -C build/x86_64  KERNEL=nova  BOARD=pc  kernel core/nova lib/ld init
+make -C build/x86_64  KERNEL=nova  BOARD=pc  timer driver/rtc server/wm app/window_layouter app/decorator app/nano3d app/top
+make -C build/x86_64  KERNEL=nova  BOARD=pc  driver/framebuffer/vesa driver/acpi driver/platform app/pci_decode driver/ps2   app/pointer app/status_bar
+make -C build/x86_64  KERNEL=nova  BOARD=pc  app/global_keys_handler server/nitpicker app/nit_focus server/event_filter server/rom_filter   server/report_rom
+make -C build/x86_64  KERNEL=nova  BOARD=pc  lib/posix lib/libm lib/vfs lib/stdcxx lib/libc
+make -C build/x86_64  KERNEL=nova  BOARD=pc  server/black_hole driver/ahci server/part_block
+# for "jam t7" or even "jam hog-deskbar.emu8" more complex scenarios:
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  driver/usb_host  # or download a pre-built binary of usb_host if it won't build : XXXX https://depot.genode.org/genodelabs/bin/x86_64/pc_usb_host_drv/2024-05-01.tar.xz
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  driver/usb_hid # or download : XXXX https://depot.genode.org/genodelabs/bin/x86_64/usb_hid_drv/2024-05-01.tar.xz
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  lib/zlib lib/vfs_pipe lib/jpeg lib/vfs_lxip  lib/avfilter lib/avformat lib/avresample lib/swscale lib/avcodec lib/avutil
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  server/nic_router driver/nic lib/lwip lib/vfs_lwip  # if driver/nic won't build, download  XXXX https://depot.genode.org/genodelabs/bin/x86_64/pc_nic_drv/2024-05-01.tar.xz
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  app/acpica server/vfs server/terminal server/terminal_log  server/mixer driver/audio
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  app/sequence
+# to build with USE_DRV_MANAGER enabled:
+# make -C build/x86_64  KERNEL=nova  BOARD=pc  app/rom_reporter server/fs_rom driver/framebuffer/boot driver/gpu/intel  # intel_gpu
+# also 'make' (or download) driver/framebuffer/pc_intel_fb  # if it won't build, download XXXX https://depot.genode.org/genodelabs/bin/x86_64/pc_intel_fb_drv/2024-05-01.tar.xz
+  
+# HoG setup
+cd ..
+mkdir hog && cd hog  # otherwise fossil might complain/require the folder to be 'empty' before opening the repo
+fossil clone http://chiselapp.com/user/ttcoder/repository/genode-haiku/  genode-haiku.fossil
+fossil open genode-haiku.fossil  # if you don't have fossil installed, clone/open might be replaced with this download link: http://chiselapp.com/user/ttcoder/repository/genode-haiku/zip
+cd genode-haiku/
+export GenodeRepos=$PWD/../../genode/repos
+# if you want a bootable USB image with a whole system (here: a 'basic' system with a few demo apps):
+jam -j4 -q hog-demos.emu6
+# if you just want to build haiku.lib.so and an app (here: DeskCalc) for e.g. integration into an unpatched SculptOS system:
+GE_XATTR_DISABLED=1  GE_DECORATIONS_AND_WM=1  jam -q -j4 DeskCalc
